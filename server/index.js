@@ -57,7 +57,13 @@ io.on('connection', (socket) => {
             callback({ error: 'Room is full (max 10)' });
             return;
         }
-        room.users.push({ id: socket.id, name: userName });
+
+        // Avoid duplicate users
+        const exists = room.users.find(u => u.id === socket.id);
+        if (!exists) {
+            room.users.push({ id: socket.id, name: userName });
+        }
+
         socket.join(roomId);
         socket.roomId = roomId;
         socket.userName = userName;

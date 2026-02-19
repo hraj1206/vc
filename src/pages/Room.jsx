@@ -60,11 +60,10 @@ function Room() {
                 if (socket) {
                     socket.emit('join-room', { roomId, userName }, (response) => {
                         if (response.error) {
-                            console.error(response.error);
-                            navigate('/');
+                            console.warn('Join error:', response.error);
+                            alert(`Joining failed: ${response.error}`);
+                            // navigate('/'); // Temporarily disabled to see the error
                         } else {
-                            // Add existing users to participants
-                            // Note: These users will call us, so we don't create peers here
                             if (response.users) {
                                 setParticipants(response.users.map(u => ({ id: u.id, name: u.name || 'User' })));
                             }
