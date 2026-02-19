@@ -12,11 +12,12 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN
 
 const io = new Server(server, {
     cors: {
-        origin: [ALLOWED_ORIGIN, "https://vc-sand-delta.vercel.app"],
+        origin: true,
         methods: ['GET', 'POST'],
         credentials: true
     },
     transports: ['websocket', 'polling'],
+    allowEIO3: true,
     maxHttpBufferSize: 50e6 // 50MB for file sharing
 });
 

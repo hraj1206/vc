@@ -13,7 +13,8 @@ export function SocketProvider({ children }) {
     useEffect(() => {
         const newSocket = io(SERVER_URL, {
             transports: ['websocket', 'polling'],
-            secure: true,
+            withCredentials: true,
+            autoConnect: true,
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000
