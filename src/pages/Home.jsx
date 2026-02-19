@@ -73,31 +73,12 @@ function Home() {
                         <FiZap /> <span>Real-time Communication</span>
                     </div>
                     <h1 className="hero-title">
-                        Connect, Play &<br />
-                        <span className="gradient-text">Share Together</span>
+                        Welcome to<br />
+                        <span className="gradient-text">Harsh VC</span>
                     </h1>
                     <p className="hero-subtitle">
-                        Your all-in-one video chatting app. Video call, watch movies together,
-                        play games, share files — all in one beautiful space.
+                        Experience high-quality video calls, instant messaging, and seamless collaboration.
                     </p>
-
-                    <div className="features-grid">
-                        {features.map((f, i) => (
-                            <div
-                                key={i}
-                                className="feature-card animate-slide-up"
-                                style={{ animationDelay: `${i * 0.1}s`, '--feature-color': f.color }}
-                            >
-                                <div className="feature-icon" style={{ color: f.color }}>
-                                    {f.icon}
-                                </div>
-                                <div>
-                                    <h3>{f.title}</h3>
-                                    <p>{f.desc}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
                 </div>
 
                 {/* Right Action Section */}

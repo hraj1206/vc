@@ -102,46 +102,9 @@
     gap: 16px;
 }
 
-.feature-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px;
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-md);
-    transition: var(--transition);
-    opacity: 0;
-}
-
-.feature-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--feature-color);
-    transform: translateY(-2px);
-}
-
-.feature-icon {
-    font-size: 24px;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: var(--radius-sm);
-    flex-shrink: 0;
-}
-
-.feature-card h3 {
+.hero-card h3 {
     font-size: 14px;
     font-weight: 700;
-    margin-bottom: 3px;
-}
-
-.feature-card p {
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.4;
 }
 
 /* Action Section */
@@ -279,46 +242,44 @@
 
 /* Responsive */
 @media (max-width: 900px) {
+    .home-container {
+        padding: 20px;
+        align-items: flex-start;
+        overflow-y: auto;
+        display: block;
+    }
+
     .home-content {
         flex-direction: column;
         gap: 30px;
-        padding-top: 40px;
+        padding-top: 20px;
+        padding-bottom: 40px;
     }
 
     .hero-section {
         text-align: center;
         flex: none;
+        width: 100%;
     }
 
     .hero-badge {
-        margin: 0 auto 20px;
+        margin: 0 auto 16px;
     }
 
     .hero-title {
-        font-size: 34px;
+        font-size: 38px;
         margin-bottom: 12px;
     }
 
     .hero-subtitle {
         font-size: 15px;
-        margin: 0 auto 30px;
-    }
-
-    .features-grid {
-        grid-template-columns: 1fr;
-        max-width: 400px;
-        margin: 0 auto;
+        margin: 0 auto 20px;
     }
 
     .action-section {
         min-width: 100%;
+        width: 100%;
         flex: none;
-    }
-
-    .home-container {
-        padding: 15px;
-        overflow-y: auto;
-        display: block;
     }
 
     .action-card {
@@ -326,17 +287,25 @@
     }
 
     .room-code {
-        font-size: 24px;
+        font-size: 28px;
         letter-spacing: 4px;
     }
 }
 
 @media (max-width: 480px) {
+    .home-container {
+        padding: 12px;
+    }
+
     .hero-title {
-        font-size: 28px;
+        font-size: 32px;
+    }
+
+    .action-card {
+        padding: 20px 16px;
     }
 
     .action-card h2 {
-        font-size: 22px;
+        font-size: 20px;
     }
 }
