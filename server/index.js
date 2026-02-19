@@ -16,8 +16,9 @@ const io = new Server(server, {
         methods: ['GET', 'POST'],
         credentials: true
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     allowEIO3: true,
+    pingTimeout: 60000,
     maxHttpBufferSize: 50e6 // 50MB for file sharing
 });
 
