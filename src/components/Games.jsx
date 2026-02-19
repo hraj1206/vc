@@ -21,10 +21,17 @@ const GAMES = [
 export default function Games({ socket, roomId, myId, userName, participants = [] }) {
     const [activeGame, setActiveGame] = useState(null);
     const [invite, setInvite] = useState(null); // { gameId, fromName, fromId }
+    const [currentGameState, setCurrentGameState] = useState(null);
     const canPlay2 = participants.length >= 2;
 
     useEffect(() => {
         if (!socket) return;
+
+        // On mount, if we just joined a room with an active game, we might need state
+        // This is usually handled by the join-room callback in Room.jsx, 
+        // which should pass it to this component somehow. 
+        // For now, let's listen for updates.
+
         const onInvite = (data) => {
             if (data.fromId !== myId) {
                 setInvite({ gameId: data.gameId, fromName: data.fromName, fromId: data.fromId });
@@ -33,43 +40,42 @@ export default function Games({ socket, roomId, myId, userName, participants = [
         const onGameSync = (data) => {
             if (data.action === 'start-sync') {
                 setActiveGame(data.gameId);
+                setCurrentGameState(data.gameState);
                 setInvite(null);
             }
         };
+        const onStateUpdate = (state) => {
+            setCurrentGameState(state);
+            if (state && state.gameId) setActiveGame(state.gameId);
+        };
+
         socket.on('game-invite', onInvite);
         socket.on('game-sync-start', onGameSync);
+        socket.on('game-state-update', onStateUpdate);
+
         return () => {
             socket.off('game-invite', onInvite);
             socket.off('game-sync-start', onGameSync);
+            socket.off('game-state-update', onStateUpdate);
         };
     }, [socket, myId]);
 
     const sendInvite = (gameId) => {
-        const game = GAMES.find(g => g.id === gameId);
         socket.emit('game-invite', { roomId, gameId, fromName: userName, fromId: myId });
-        setActiveGame(gameId); // For the sender, just go in
+        setActiveGame(gameId);
     };
 
     const acceptInvite = () => {
         if (!invite) return;
-        setActiveGame(invite.gameId);
         socket.emit('game-accept', { roomId, gameId: invite.gameId });
         setInvite(null);
     };
 
     const gameComp = {
-        tictactoe: <TicTacToe socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        connect4: <Connect4 socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        rps: <RPS socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        hangman: <Hangman socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        memory: <Memory socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        numguess: <NumGuess socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        mathquiz: <MathQuiz socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        wordchain: <WordChain socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        drawing: <DrawTogether socket={socket} roomId={roomId} myId={myId} userName={userName} />,
-        dice: <DiceRoll socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        coin: <CoinFlip socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
-        snake: <Snake socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
+        tictactoe: <TicTacToe socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        rps: <RPS socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        connect4: <Connect4 socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        // ... add others as they get server logic
     };
 
     return (
@@ -138,14 +144,14 @@ export default function Games({ socket, roomId, myId, userName, participants = [
 }
 
 /* ── helpers ── */
-function useGameSync(socket, gameType, handlers) {
+function useGameSync(socket, handlers) {
     useEffect(() => {
         if (!socket) return;
-        const onUpdate = (data) => { if (data.gameType === gameType && handlers.onUpdate) handlers.onUpdate(data.action, data.from); };
-        const onReset = (data) => { if (data.gameType === gameType && handlers.onReset) handlers.onReset(data); };
-        socket.on('game-update', onUpdate);
-        socket.on('game-reset', onReset);
-        return () => { socket.off('game-update', onUpdate); socket.off('game-reset', onReset); };
+        const onStateUpdate = (state) => {
+            if (handlers.onStateUpdate) handlers.onStateUpdate(state);
+        };
+        socket.on('game-state-update', onStateUpdate);
+        return () => { socket.off('game-state-update', onStateUpdate); };
     }, [socket]);
 }
 
@@ -157,43 +163,34 @@ function emitReset(socket, roomId, gameType) {
 }
 
 /* ─────────────── 1. TIC-TAC-TOE ─────────────── */
-function TicTacToe({ socket, roomId, myId, userName, participants }) {
-    const sorted = [...participants].sort((a, b) => a.id.localeCompare(b.id));
-    const mySymbol = sorted[0]?.id === myId ? 'X' : 'O';
-    const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
-    const opp = participants.find(p => !p.isMe);
+function TicTacToe({ socket, roomId, myId, userName, participants, initialState }) {
+    const [board, setBoard] = useState(initialState?.board || Array(9).fill(null));
+    const [xTurn, setXTurn] = useState(initialState?.xTurn ?? true);
+    const [winner, setWinner] = useState(initialState?.winner || null);
+    const [gameUsers, setGameUsers] = useState(initialState?.users || []);
 
-    const [board, setBoard] = useState(Array(9).fill(null));
-    const [xTurn, setXTurn] = useState(true);
-    const [winner, setWinner] = useState(null);
-    const [winLine, setWinLine] = useState([]);
-    const [score, setScore] = useState({ me: 0, them: 0, draws: 0 });
-
-    useGameSync(socket, 'tictactoe', {
-        onUpdate: (action) => {
-            setBoard(b => { const nb = [...b]; nb[action.i] = action.s; return nb; });
-            setXTurn(action.s !== 'X');
-        },
-        onReset: () => { setBoard(Array(9).fill(null)); setWinner(null); setWinLine([]); setXTurn(true); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'tictactoe') {
+                setBoard(state.board);
+                setXTurn(state.xTurn);
+                setWinner(state.winner);
+                setGameUsers(state.users);
+            }
+        }
     });
 
-    useEffect(() => {
-        const r = checkTTT(board);
-        if (!r) return;
-        setWinner(r.w); setWinLine(r.line);
-        if (r.w === mySymbol) setScore(s => ({ ...s, me: s.me + 1 }));
-        else if (r.w === 'Draw') setScore(s => ({ ...s, draws: s.draws + 1 }));
-        else setScore(s => ({ ...s, them: s.them + 1 }));
-    }, [board]);
-
+    const mySymbol = gameUsers[0] === myId ? 'X' : 'O';
+    const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
+    const opp = participants.find(p => !p.isMe);
     const isMyTurn = (xTurn && mySymbol === 'X') || (!xTurn && mySymbol === 'O');
+
     const move = i => {
         if (board[i] || winner || !isMyTurn) return;
-        const nb = [...board]; nb[i] = mySymbol;
-        setBoard(nb); setXTurn(mySymbol !== 'X');
-        emit(socket, roomId, 'tictactoe', { i, s: mySymbol });
+        socket.emit('game-action', { roomId, gameId: 'tictactoe', action: { i } });
     };
-    const reset = () => { setBoard(Array(9).fill(null)); setWinner(null); setWinLine([]); setXTurn(true); emitReset(socket, roomId, 'tictactoe'); };
+
+    const reset = () => socket.emit('game-reset', { roomId, gameId: 'tictactoe' });
 
     return (
         <div className="ttt-container">
@@ -206,14 +203,9 @@ function TicTacToe({ socket, roomId, myId, userName, participants }) {
                 {winner ? (winner === 'Draw' ? <span className="ttt-result draw">🤝 Draw!</span> : winner === mySymbol ? <span className="ttt-result win">🎉 You Won!</span> : <span className="ttt-result lose">😢 {opp?.name} Won!</span>)
                     : <span className="ttt-turn">{isMyTurn ? `Your turn (${mySymbol})` : `${opp?.name || 'Opp'}'s turn…`}</span>}
             </div>
-            <div className="score-row">
-                <ScoreBox label={userName} val={score.me} color="#6c5ce7" />
-                <ScoreBox label="Draws" val={score.draws} color="#f59e0b" />
-                <ScoreBox label={opp?.name || 'Opp'} val={score.them} color="#ec4899" />
-            </div>
             <div className="ttt-board">
                 {board.map((c, i) => (
-                    <button key={i} className={`ttt-cell ${c ? 'filled' : ''} ${c === 'X' ? 'x' : ''} ${c === 'O' ? 'o' : ''} ${winLine.includes(i) ? 'winner-cell' : ''}`} onClick={() => move(i)} disabled={!!c || !!winner || !isMyTurn}>
+                    <button key={i} className={`ttt-cell ${c ? 'filled' : ''} ${c === 'X' ? 'x' : ''} ${c === 'O' ? 'o' : ''}`} onClick={() => move(i)} disabled={!!c || !!winner || !isMyTurn}>
                         {c && <span className="cell-symbol">{c}</span>}
                     </button>
                 ))}
@@ -222,49 +214,38 @@ function TicTacToe({ socket, roomId, myId, userName, participants }) {
         </div>
     );
 }
-function checkTTT(b) {
-    const lines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
-    for (const line of lines) { const [a, c, d] = line; if (b[a] && b[a] === b[c] && b[a] === b[d]) return { w: b[a], line }; }
-    if (b.every(c => c)) return { w: 'Draw', line: [] };
-    return null;
-}
 
 /* ─────────────── 2. CONNECT FOUR ─────────────── */
-function Connect4({ socket, roomId, myId, userName, participants }) {
+function Connect4({ socket, roomId, myId, userName, participants, initialState }) {
     const ROWS = 6, COLS = 7;
     const empty = () => Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
-    const sorted = [...participants].sort((a, b) => a.id.localeCompare(b.id));
-    const myColor = sorted[0]?.id === myId ? 'R' : 'Y';
-    const oppColor = myColor === 'R' ? 'Y' : 'R';
-    const opp = participants.find(p => !p.isMe);
+    const [board, setBoard] = useState(initialState?.board || empty());
+    const [rTurn, setRTurn] = useState(initialState?.rTurn ?? true);
+    const [winner, setWinner] = useState(initialState?.winner || null);
+    const [gameUsers, setGameUsers] = useState(initialState?.users || []);
 
-    const [board, setBoard] = useState(empty());
-    const [rTurn, setRTurn] = useState(true);
-    const [winner, setWinner] = useState(null);
-    const [score, setScore] = useState({ me: 0, them: 0 });
-
-    useGameSync(socket, 'connect4', {
-        onUpdate: (action) => {
-            setBoard(b => { const nb = b.map(r => [...r]); nb[action.r][action.c] = action.color; return nb; });
-            setRTurn(action.color !== 'R');
-        },
-        onReset: () => { setBoard(empty()); setWinner(null); setRTurn(true); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'connect4') {
+                setBoard(state.board);
+                setRTurn(state.rTurn);
+                setWinner(state.winner);
+                setGameUsers(state.users);
+            }
+        }
     });
 
-    useEffect(() => { const w = checkC4(board); if (w) { setWinner(w); if (w === myColor) setScore(s => ({ ...s, me: s.me + 1 })); else setScore(s => ({ ...s, them: s.them + 1 })); } }, [board]);
-
+    const myColor = gameUsers[0] === myId ? 'R' : 'Y';
+    const oppColor = myColor === 'R' ? 'Y' : 'R';
+    const opp = participants.find(p => !p.isMe);
     const isMyTurn = (rTurn && myColor === 'R') || (!rTurn && myColor === 'Y');
 
     const drop = col => {
         if (winner || !isMyTurn) return;
-        let row = -1;
-        for (let r = ROWS - 1; r >= 0; r--) { if (!board[r][col]) { row = r; break; } }
-        if (row === -1) return;
-        const nb = board.map(r => [...r]); nb[row][col] = myColor;
-        setBoard(nb); setRTurn(myColor !== 'R');
-        emit(socket, roomId, 'connect4', { r: row, c: col, color: myColor });
+        socket.emit('game-action', { roomId, gameId: 'connect4', action: { c: col } });
     };
-    const reset = () => { setBoard(empty()); setWinner(null); setRTurn(true); emitReset(socket, roomId, 'connect4'); };
+
+    const reset = () => socket.emit('game-reset', { roomId, gameId: 'connect4' });
 
     return (
         <div className="c4-container">
@@ -302,66 +283,41 @@ function checkC4(board) {
 }
 
 /* ─────────────── 3. ROCK PAPER SCISSORS ─────────────── */
-function RPS({ socket, roomId, myId, userName, participants }) {
-    const opp = participants.find(p => !p.isMe);
-    const [myPick, setMyPick] = useState(null);
-    const [oppPick, setOppPick] = useState(null);
-    const [reveal, setReveal] = useState(false);
-    const [countdown, setCountdown] = useState(null);
-    const [result, setResult] = useState(null);
-    const [score, setScore] = useState({ me: 0, them: 0, draws: 0 });
+function RPS({ socket, roomId, myId, userName, participants, initialState }) {
+    const [picks, setPicks] = useState(initialState?.picks || {});
+    const [reveal, setReveal] = useState(initialState?.reveal || false);
+    const [result, setResult] = useState(initialState?.result || null);
+    const [gameUsers, setGameUsers] = useState(initialState?.users || []);
+
     const choices = ['✊', '✋', '✌️'];
     const labels = ['Rock', 'Paper', 'Scissors'];
 
-    useGameSync(socket, 'rps', {
-        onUpdate: (action) => {
-            if (action.type === 'pick') {
-                setOppPick(action.pick);
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'rps') {
+                setPicks(state.picks);
+                setReveal(state.reveal);
+                setResult(state.result);
+                setGameUsers(state.users);
             }
-        },
-        onReset: () => { setMyPick(null); setOppPick(null); setResult(null); setReveal(false); setCountdown(null); }
+        }
     });
 
-    useEffect(() => {
-        if (myPick && oppPick && !reveal && countdown === null) {
-            // Both picked! Start reveal countdown
-            let timer = 3;
-            setCountdown(timer);
-            const interval = setInterval(() => {
-                timer--;
-                if (timer <= 0) {
-                    clearInterval(interval);
-                    setReveal(true);
-                    setCountdown(null);
-                } else {
-                    setCountdown(timer);
-                }
-            }, 800);
-            return () => clearInterval(interval);
-        }
-    }, [myPick, oppPick]);
-
-    useEffect(() => {
-        if (reveal && myPick && oppPick) {
-            const ci = ['✊', '✋', '✌️'];
-            const mi = ci.indexOf(myPick), oi = ci.indexOf(oppPick);
-            let r;
-            if (mi === oi) r = 'Draw';
-            else if ((mi - oi + 3) % 3 === 1) r = 'Win';
-            else r = 'Lose';
-            setResult(r);
-            if (r === 'Win') setScore(s => ({ ...s, me: s.me + 1 }));
-            else if (r === 'Lose') setScore(s => ({ ...s, them: s.them + 1 }));
-            else setScore(s => ({ ...s, draws: s.draws + 1 }));
-        }
-    }, [reveal, myPick, oppPick]);
+    const opp = participants.find(p => !p.isMe);
+    const myPick = picks[myId];
+    const oppPick = gameUsers.find(uid => uid !== myId) ? picks[gameUsers.find(uid => uid !== myId)] : null;
 
     const pick = p => {
         if (myPick) return;
-        setMyPick(p);
-        emit(socket, roomId, 'rps', { type: 'pick', pick: p });
+        socket.emit('game-action', { roomId, gameId: 'rps', action: { pick: p } });
     };
-    const reset = () => { setMyPick(null); setOppPick(null); setResult(null); setReveal(false); setCountdown(null); emitReset(socket, roomId, 'rps'); };
+
+    const reset = () => socket.emit('game-reset', { roomId, gameId: 'rps' });
+
+    let resultText = '';
+    if (result === 'Draw') resultText = '🤝 Draw!';
+    else if (result === myId) resultText = '🎉 You Won!';
+    else if (result) resultText = `😢 ${opp?.name || 'Opponent'} Won!`;
 
     return (
         <div className="rps-container">
@@ -378,11 +334,7 @@ function RPS({ socket, roomId, myId, userName, participants }) {
                 </div>
 
                 <div className="rps-vs-box">
-                    {countdown !== null ? (
-                        <div className="rps-countdown animate-scale-in">{countdown}</div>
-                    ) : (
-                        <span className="rps-vs">VS</span>
-                    )}
+                    <span className="rps-vs">VS</span>
                 </div>
 
                 <div className={`rps-side ${oppPick ? 'picked' : ''}`}>
@@ -391,12 +343,12 @@ function RPS({ socket, roomId, myId, userName, participants }) {
                 </div>
             </div>
 
-            {result && <div className={`rps-result ${result.toLowerCase()}`}>{result === 'Win' ? '🎉 You Win!' : result === 'Lose' ? '😢 You Lose!' : '🤝 Draw!'}</div>}
+            {result && <div className={`rps-result`}>{resultText}</div>}
 
             {!myPick && (
                 <div className="rps-choices">
                     {choices.map((c, i) => (
-                        <button key={c} className="rps-btn" onClick={() => pick(c)} title={labels[i]}>
+                        <button key={c} className="rps-btn" onClick={() => pick(c)}>
                             <span className="rps-emoji">{c}</span>
                             <span className="rps-label">{labels[i]}</span>
                         </button>
@@ -405,8 +357,7 @@ function RPS({ socket, roomId, myId, userName, participants }) {
             )}
 
             {result && <button className="btn btn-secondary btn-full" onClick={reset}><FiRefreshCw size={13} /> Play Again</button>}
-            {myPick && !oppPick && <p className="waiting-text">Waiting for {opp?.name || 'opponent'}…</p>}
-            {myPick && oppPick && !reveal && <p className="waiting-text">Both ready! Revealing…</p>}
+            {myPick && !reveal && <p className="waiting-text">Waiting for {opp?.name || 'opponent'}…</p>}
         </div>
     );
 }
