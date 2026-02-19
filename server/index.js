@@ -6,13 +6,17 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN
+    ? process.env.ALLOWED_ORIGIN.replace(/\/$/, "")
+    : '*';
 
 const io = new Server(server, {
     cors: {
-        origin: ALLOWED_ORIGIN,
-        methods: ['GET', 'POST']
+        origin: [ALLOWED_ORIGIN, "https://vc-sand-delta.vercel.app"],
+        methods: ['GET', 'POST'],
+        credentials: true
     },
+    transports: ['websocket', 'polling'],
     maxHttpBufferSize: 50e6 // 50MB for file sharing
 });
 
