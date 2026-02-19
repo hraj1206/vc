@@ -281,22 +281,62 @@
 @media (max-width: 900px) {
     .home-content {
         flex-direction: column;
-        gap: 40px;
+        gap: 30px;
+        padding-top: 40px;
+    }
+
+    .hero-section {
+        text-align: center;
+        flex: none;
+    }
+
+    .hero-badge {
+        margin: 0 auto 20px;
     }
 
     .hero-title {
-        font-size: 36px;
+        font-size: 34px;
+        margin-bottom: 12px;
+    }
+
+    .hero-subtitle {
+        font-size: 15px;
+        margin: 0 auto 30px;
     }
 
     .features-grid {
         grid-template-columns: 1fr;
+        max-width: 400px;
+        margin: 0 auto;
     }
 
     .action-section {
         min-width: 100%;
+        flex: none;
     }
 
     .home-container {
-        padding: 20px;
+        padding: 15px;
+        overflow-y: auto;
+        display: block;
+    }
+
+    .action-card {
+        padding: 24px;
+    }
+
+    .room-code {
+        font-size: 24px;
+        letter-spacing: 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-title {
+        font-size: 28px;
+    }
+
+    .action-card h2 {
+        font-size: 22px;
     }
 }

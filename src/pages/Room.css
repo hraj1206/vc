@@ -411,7 +411,33 @@
 }
 
 /* Responsive */
+@media (max-width: 900px) {
+    .video-grid.grid-many {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .video-avatar span {
+        width: 60px;
+        height: 60px;
+        font-size: 24px;
+    }
+}
+
 @media (max-width: 768px) {
+    .room-topbar {
+        padding: 8px 12px;
+    }
+
+    .room-info h3 {
+        display: none;
+        /* Hide 'Room' label on small screens */
+    }
+
+    .participants-count span {
+        display: none;
+        /* Hide text, keep icon and count */
+    }
+
     .side-panel {
         position: absolute;
         top: 0;
@@ -421,19 +447,73 @@
         margin: 0;
         z-index: 50;
         border-radius: 0;
+        backdrop-filter: blur(40px);
+        background: rgba(10, 10, 26, 0.98);
+    }
+
+    .video-area {
+        padding: 8px;
+    }
+
+    .video-grid {
+        gap: 8px;
     }
 
     .video-grid.grid-2 {
         grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+    }
+
+    .video-grid.grid-4 {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: repeat(2, 1fr);
+    }
+
+    .room-controls {
+        padding: 12px;
     }
 
     .controls-center {
-        gap: 4px;
+        gap: 6px;
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
     }
 
     .btn-icon {
-        width: 38px;
-        height: 38px;
+        width: 40px;
+        height: 40px;
         font-size: 16px;
+    }
+
+    .controls-divider {
+        display: none;
+    }
+
+    .video-label {
+        padding: 4px 8px;
+        bottom: 8px;
+        left: 8px;
+    }
+
+    .video-name {
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .video-grid.grid-4,
+    .video-grid.grid-many {
+        grid-template-columns: 1fr;
+        /* Stack everything on very small phones */
+    }
+
+    .video-tile.fullscreen {
+        padding: 0;
+    }
+
+    .room-topbar {
+        height: 50px;
     }
 }
