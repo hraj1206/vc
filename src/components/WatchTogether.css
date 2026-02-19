@@ -1,0 +1,154 @@
+.watch-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 16px;
+    padding: 16px;
+}
+
+.watch-input-area {
+    flex-shrink: 0;
+}
+
+.watch-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 14px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+}
+
+.watch-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+.watch-input:focus {
+    box-shadow: none;
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+}
+
+/* Player */
+.watch-player {
+    flex-shrink: 0;
+}
+
+.player-wrapper {
+    position: relative;
+    padding-bottom: 56.25%;
+    height: 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.player-iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.player-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+}
+
+.player-status {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* Empty */
+.watch-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.watch-empty-icon {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(108, 92, 231, 0.1);
+    border-radius: 50%;
+    color: var(--accent-primary);
+    margin-bottom: 8px;
+}
+
+.watch-empty h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.watch-empty p {
+    font-size: 13px;
+    max-width: 260px;
+    line-height: 1.5;
+}
+
+/* Sync Log */
+.sync-log {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.sync-log h4 {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.sync-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sync-log-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.log-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+.log-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+}

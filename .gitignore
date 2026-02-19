@@ -1,0 +1,12 @@
+# ── Root (Vite frontend) ──
+node_modules/
+dist/
+
+# ── Server ──
+server/node_modules/
+
+# ── Misc ──
+.env
+.env.local
+.DS_Store
+*.log
