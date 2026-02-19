@@ -36,17 +36,11 @@ function Home() {
             return;
         }
         setError('');
-        socket.emit('join-room', { roomId: joinCode.toUpperCase(), userName }, (response) => {
-            if (response.error) {
-                setError(response.error);
-            } else {
-                navigate(`/room/${joinCode.toUpperCase()}`, { state: { userName } });
-            }
-        });
+        // Just navigate, Room.jsx will handle the actual socket join
+        navigate(`/room/${joinCode.toUpperCase()}`, { state: { userName } });
     };
 
     const enterCreatedRoom = () => {
-        socket.emit('join-room', { roomId: createdRoom, userName }, () => { });
         navigate(`/room/${createdRoom}`, { state: { userName } });
     };
 

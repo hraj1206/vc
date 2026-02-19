@@ -55,6 +55,25 @@ function Room() {
                 if (myVideoRef.current) {
                     myVideoRef.current.srcObject = mediaStream;
                 }
+
+                // Once stream is ready, join the room
+                if (socket) {
+                    socket.emit('join-room', { roomId, userName }, (response) => {
+                        if (response.error) {
+                            console.error(response.error);
+                            navigate('/');
+                        } else {
+                            // Add existing users to participants
+                            // Note: These users will call us, so we don't create peers here
+                            if (response.users) {
+                                setParticipants(response.users.map(u => ({ id: u.id, name: u.name || 'User' })));
+                            }
+                            if (response.messages) {
+                                setMessages(response.messages);
+                            }
+                        }
+                    });
+                }
             } catch (err) {
                 console.error('Failed to get media:', err);
                 // Try audio only
@@ -62,6 +81,14 @@ function Room() {
                     const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     setStream(audioStream);
                     setVideoEnabled(false);
+
+                    if (socket) {
+                        socket.emit('join-room', { roomId, userName }, (response) => {
+                            if (!response.error && response.users) {
+                                setParticipants(response.users.map(u => ({ id: u.id, name: u.name || 'User' })));
+                            }
+                        });
+                    }
                 } catch (e) {
                     console.error('No media available:', e);
                 }
@@ -76,7 +103,7 @@ function Room() {
             }
             Object.values(peersRef.current).forEach(p => p.peer?.destroy());
         };
-    }, []);
+    }, [socket, roomId, userName]);
 
     // Socket events
     useEffect(() => {
@@ -92,9 +119,16 @@ function Room() {
         });
 
         socket.on('incoming-call', ({ signal, from, userName: name }) => {
+            console.log(`Incoming call from ${name}`);
+            // Add to participants if not already there
+            setParticipants(prev => {
+                if (prev.find(p => p.id === from)) return prev;
+                return [...prev, { id: from, name }];
+            });
+
             // Create peer (non-initiator) and answer
             if (stream) {
-                const peer = createPeer(from, stream, false);
+                const peer = createPeer(from, stream, false, name);
                 peer.signal(signal);
             }
         });
@@ -146,7 +180,7 @@ function Room() {
         };
     }, [socket, stream, activePanel]);
 
-    const createPeer = (userId, mediaStream, initiator) => {
+    const createPeer = (userId, mediaStream, initiator, name = '') => {
         const peer = new Peer({
             initiator,
             trickle: true,
@@ -183,7 +217,7 @@ function Room() {
             console.error('Peer error:', err);
         });
 
-        peersRef.current[userId] = { peer, name: '' };
+        peersRef.current[userId] = { peer, name };
         setPeers(prev => ({ ...prev, [userId]: { peer, stream: null } }));
         return peer;
     };

@@ -36,7 +36,7 @@ io.on('connection', (socket) => {
     socket.on('create-room', (callback) => {
         const roomId = generateRoomId();
         rooms.set(roomId, {
-            users: [socket.id],
+            users: [{ id: socket.id, name: socket.userName || 'Creator' }],
             messages: [],
             watchUrl: '',
             gameState: null
@@ -57,7 +57,7 @@ io.on('connection', (socket) => {
             callback({ error: 'Room is full (max 10)' });
             return;
         }
-        room.users.push(socket.id);
+        room.users.push({ id: socket.id, name: userName });
         socket.join(roomId);
         socket.roomId = roomId;
         socket.userName = userName;
@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
 
         callback({
             success: true,
-            users: room.users.filter(u => u !== socket.id),
+            users: room.users.filter(u => u.id !== socket.id),
             messages: room.messages
         });
         console.log(`${userName} joined room: ${roomId}`);
@@ -162,7 +162,7 @@ io.on('connection', (socket) => {
         if (socket.roomId) {
             const room = rooms.get(socket.roomId);
             if (room) {
-                room.users = room.users.filter(u => u !== socket.id);
+                room.users = room.users.filter(u => u.id !== socket.id);
                 socket.to(socket.roomId).emit('user-left', {
                     userId: socket.id,
                     userName: socket.userName
