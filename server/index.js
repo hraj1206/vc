@@ -140,17 +140,28 @@ io.on('connection', (socket) => {
     });
 
     // ── Games ──
-    socket.on('game-action', ({ roomId, gameType, action }) => {
-        socket.to(roomId).emit('game-update', {
-            gameType,
-            action,
-            from: socket.id,
-            fromName: socket.userName
+    // Game sync handlers
+    socket.on('game-action', (data) => {
+        socket.to(data.roomId).emit('game-update', { ...data, from: socket.id });
+    });
+
+    socket.on('game-reset', (data) => {
+        socket.to(data.roomId).emit('game-reset', data);
+    });
+
+    socket.on('game-invite', (data) => {
+        socket.to(data.roomId).emit('game-invite', {
+            gameId: data.gameId,
+            fromName: data.fromName,
+            fromId: data.fromId
         });
     });
 
-    socket.on('game-reset', ({ roomId, gameType }) => {
-        socket.to(roomId).emit('game-reset', { gameType });
+    socket.on('game-accept', (data) => {
+        io.to(data.roomId).emit('game-sync-start', {
+            action: 'start-sync',
+            gameId: data.gameId
+        });
     });
 
     // ── Screen Share ──

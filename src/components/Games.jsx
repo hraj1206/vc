@@ -20,7 +20,42 @@ const GAMES = [
 
 export default function Games({ socket, roomId, myId, userName, participants = [] }) {
     const [activeGame, setActiveGame] = useState(null);
+    const [invite, setInvite] = useState(null); // { gameId, fromName, fromId }
     const canPlay2 = participants.length >= 2;
+
+    useEffect(() => {
+        if (!socket) return;
+        const onInvite = (data) => {
+            if (data.fromId !== myId) {
+                setInvite({ gameId: data.gameId, fromName: data.fromName, fromId: data.fromId });
+            }
+        };
+        const onGameSync = (data) => {
+            if (data.action === 'start-sync') {
+                setActiveGame(data.gameId);
+                setInvite(null);
+            }
+        };
+        socket.on('game-invite', onInvite);
+        socket.on('game-sync-start', onGameSync);
+        return () => {
+            socket.off('game-invite', onInvite);
+            socket.off('game-sync-start', onGameSync);
+        };
+    }, [socket, myId]);
+
+    const sendInvite = (gameId) => {
+        const game = GAMES.find(g => g.id === gameId);
+        socket.emit('game-invite', { roomId, gameId, fromName: userName, fromId: myId });
+        setActiveGame(gameId); // For the sender, just go in
+    };
+
+    const acceptInvite = () => {
+        if (!invite) return;
+        setActiveGame(invite.gameId);
+        socket.emit('game-accept', { roomId, gameId: invite.gameId });
+        setInvite(null);
+    };
 
     const gameComp = {
         tictactoe: <TicTacToe socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} />,
@@ -66,7 +101,7 @@ export default function Games({ socket, roomId, myId, userName, participants = [
                                 <button
                                     key={g.id}
                                     className={`game-card-grid ${locked ? 'locked' : ''}`}
-                                    onClick={() => !locked && setActiveGame(g.id)}
+                                    onClick={() => !locked && sendInvite(g.id)}
                                     disabled={locked}
                                     title={locked ? 'Need 2+ players' : ''}
                                 >
@@ -78,6 +113,19 @@ export default function Games({ socket, roomId, myId, userName, participants = [
                             );
                         })}
                     </div>
+                    {invite && (
+                        <div className="game-invite-overlay">
+                            <div className="game-invite-card glass-card animate-scale-in">
+                                <div className="invite-icon">🎮</div>
+                                <h3>Game Invite!</h3>
+                                <p><strong>{invite.fromName}</strong> invited you to play <strong>{GAMES.find(g => g.id === invite.gameId)?.name}</strong></p>
+                                <div className="invite-btns">
+                                    <button className="btn btn-primary" onClick={acceptInvite}>Accept</button>
+                                    <button className="btn btn-secondary" onClick={() => setInvite(null)}>Decline</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </>
             ) : (
                 <div className="game-view">
@@ -258,6 +306,8 @@ function RPS({ socket, roomId, myId, userName, participants }) {
     const opp = participants.find(p => !p.isMe);
     const [myPick, setMyPick] = useState(null);
     const [oppPick, setOppPick] = useState(null);
+    const [reveal, setReveal] = useState(false);
+    const [countdown, setCountdown] = useState(null);
     const [result, setResult] = useState(null);
     const [score, setScore] = useState({ me: 0, them: 0, draws: 0 });
     const choices = ['✊', '✋', '✌️'];
@@ -265,31 +315,53 @@ function RPS({ socket, roomId, myId, userName, participants }) {
 
     useGameSync(socket, 'rps', {
         onUpdate: (action) => {
-            setOppPick(action.pick);
+            if (action.type === 'pick') {
+                setOppPick(action.pick);
+            }
         },
-        onReset: () => { setMyPick(null); setOppPick(null); setResult(null); }
+        onReset: () => { setMyPick(null); setOppPick(null); setResult(null); setReveal(false); setCountdown(null); }
     });
 
     useEffect(() => {
-        if (!myPick || !oppPick) return;
-        const ci = ['✊', '✋', '✌️'];
-        const mi = ci.indexOf(myPick), oi = ci.indexOf(oppPick);
-        let r;
-        if (mi === oi) r = 'Draw';
-        else if ((mi - oi + 3) % 3 === 1) r = 'Win';
-        else r = 'Lose';
-        setResult(r);
-        if (r === 'Win') setScore(s => ({ ...s, me: s.me + 1 }));
-        else if (r === 'Lose') setScore(s => ({ ...s, them: s.them + 1 }));
-        else setScore(s => ({ ...s, draws: s.draws + 1 }));
+        if (myPick && oppPick && !reveal && countdown === null) {
+            // Both picked! Start reveal countdown
+            let timer = 3;
+            setCountdown(timer);
+            const interval = setInterval(() => {
+                timer--;
+                if (timer <= 0) {
+                    clearInterval(interval);
+                    setReveal(true);
+                    setCountdown(null);
+                } else {
+                    setCountdown(timer);
+                }
+            }, 800);
+            return () => clearInterval(interval);
+        }
     }, [myPick, oppPick]);
+
+    useEffect(() => {
+        if (reveal && myPick && oppPick) {
+            const ci = ['✊', '✋', '✌️'];
+            const mi = ci.indexOf(myPick), oi = ci.indexOf(oppPick);
+            let r;
+            if (mi === oi) r = 'Draw';
+            else if ((mi - oi + 3) % 3 === 1) r = 'Win';
+            else r = 'Lose';
+            setResult(r);
+            if (r === 'Win') setScore(s => ({ ...s, me: s.me + 1 }));
+            else if (r === 'Lose') setScore(s => ({ ...s, them: s.them + 1 }));
+            else setScore(s => ({ ...s, draws: s.draws + 1 }));
+        }
+    }, [reveal, myPick, oppPick]);
 
     const pick = p => {
         if (myPick) return;
         setMyPick(p);
-        emit(socket, roomId, 'rps', { pick: p });
+        emit(socket, roomId, 'rps', { type: 'pick', pick: p });
     };
-    const reset = () => { setMyPick(null); setOppPick(null); setResult(null); emitReset(socket, roomId, 'rps'); };
+    const reset = () => { setMyPick(null); setOppPick(null); setResult(null); setReveal(false); setCountdown(null); emitReset(socket, roomId, 'rps'); };
 
     return (
         <div className="rps-container">
@@ -298,12 +370,29 @@ function RPS({ socket, roomId, myId, userName, participants }) {
                 <ScoreBox label="Draws" val={score.draws} color="#f59e0b" />
                 <ScoreBox label={opp?.name || 'Opp'} val={score.them} color="#ec4899" />
             </div>
+
             <div className="rps-arena">
-                <div className="rps-side">{myPick || '?'}</div>
-                <span className="rps-vs">VS</span>
-                <div className="rps-side">{oppPick || (myPick ? '⏳' : '?')}</div>
+                <div className={`rps-side ${myPick ? 'picked' : ''}`}>
+                    {reveal ? myPick : (myPick ? '✅' : '?')}
+                    <div className="rps-side-label">You</div>
+                </div>
+
+                <div className="rps-vs-box">
+                    {countdown !== null ? (
+                        <div className="rps-countdown animate-scale-in">{countdown}</div>
+                    ) : (
+                        <span className="rps-vs">VS</span>
+                    )}
+                </div>
+
+                <div className={`rps-side ${oppPick ? 'picked' : ''}`}>
+                    {reveal ? oppPick : (oppPick ? '✅' : '?')}
+                    <div className="rps-side-label">{opp?.name || 'Opp'}</div>
+                </div>
             </div>
+
             {result && <div className={`rps-result ${result.toLowerCase()}`}>{result === 'Win' ? '🎉 You Win!' : result === 'Lose' ? '😢 You Lose!' : '🤝 Draw!'}</div>}
+
             {!myPick && (
                 <div className="rps-choices">
                     {choices.map((c, i) => (
@@ -314,8 +403,10 @@ function RPS({ socket, roomId, myId, userName, participants }) {
                     ))}
                 </div>
             )}
+
             {result && <button className="btn btn-secondary btn-full" onClick={reset}><FiRefreshCw size={13} /> Play Again</button>}
-            {myPick && !result && <p className="waiting-text">Waiting for {opp?.name || 'opponent'}…</p>}
+            {myPick && !oppPick && <p className="waiting-text">Waiting for {opp?.name || 'opponent'}…</p>}
+            {myPick && oppPick && !reveal && <p className="waiting-text">Both ready! Revealing…</p>}
         </div>
     );
 }
