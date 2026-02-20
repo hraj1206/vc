@@ -246,6 +246,11 @@
     border: 2px solid var(--accent-primary);
 }
 
+.local-video .video-element {
+    transform: scaleX(-1);
+    object-fit: cover;
+}
+
 .video-label.spotlight-label {
     top: 12px;
     bottom: auto;
