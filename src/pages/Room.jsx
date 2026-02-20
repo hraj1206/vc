@@ -20,7 +20,24 @@ function Room() {
     const location = useLocation();
     const navigate = useNavigate();
     const { socket, myId } = useSocket();
-    const userName = location.state?.userName || 'Guest';
+    const [userName, setUserName] = useState(location.state?.userName || sessionStorage.getItem('vc_userName') || '');
+
+    useEffect(() => {
+        if (!userName) {
+            const savedName = sessionStorage.getItem('vc_userName');
+            if (savedName) {
+                setUserName(savedName);
+            } else {
+                const promptName = prompt("Enter your name to join the call:");
+                if (promptName) {
+                    setUserName(promptName);
+                    sessionStorage.setItem('vc_userName', promptName);
+                } else {
+                    navigate('/');
+                }
+            }
+        }
+    }, [userName, navigate]);
 
     // Media state
     const [stream, setStream] = useState(null);
@@ -96,14 +113,22 @@ function Room() {
         };
         init();
 
+        // Re-join if socket reconnects
+        if (socket) {
+            socket.on('connect', init);
+        }
+
         return () => {
             // Cleanup
             if (stream) {
                 stream.getTracks().forEach(t => t.stop());
             }
             Object.values(peersRef.current).forEach(p => p.peer?.destroy());
+            if (socket) {
+                socket.off('connect', init);
+            }
         };
-    }, [socket, roomId, userName]);
+    }, [socket, roomId, userName, navigate]);
 
     // Socket events
     useEffect(() => {

@@ -36,11 +36,12 @@ function Home() {
             return;
         }
         setError('');
-        // Just navigate, Room.jsx will handle the actual socket join
+        sessionStorage.setItem('vc_userName', userName);
         navigate(`/room/${joinCode.toUpperCase()}`, { state: { userName } });
     };
 
     const enterCreatedRoom = () => {
+        sessionStorage.setItem('vc_userName', userName);
         navigate(`/room/${createdRoom}`, { state: { userName } });
     };
 
