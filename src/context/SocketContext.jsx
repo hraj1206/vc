@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 
 const SocketContext = createContext();
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || `http://${window.location.hostname}:3001`;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'https://vc-production-eb7c.up.railway.app';
 
 export function SocketProvider({ children }) {
     const [socket, setSocket] = useState(null);
@@ -11,6 +11,7 @@ export function SocketProvider({ children }) {
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {
+        console.log('Attempting to connect to socket server at:', SERVER_URL);
         const newSocket = io(SERVER_URL, {
             withCredentials: true,
             autoConnect: true,

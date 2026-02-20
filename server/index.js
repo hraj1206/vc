@@ -6,13 +6,11 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN
-    ? process.env.ALLOWED_ORIGIN.replace(/\/$/, "")
-    : '*';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://vc-sand-delta.vercel.app';
 
 const io = new Server(server, {
     cors: {
-        origin: true,
+        origin: ALLOWED_ORIGIN,
         methods: ['GET', 'POST'],
         credentials: true
     },
