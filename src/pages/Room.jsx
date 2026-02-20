@@ -70,6 +70,7 @@ function Room() {
                     video: { width: 1280, height: 720, facingMode: 'user' },
                     audio: { echoCancellation: true, noiseSuppression: true }
                 });
+                setStream(mediaStream);
                 if (socket) {
                     socket.emit('join-room', { roomId, userName }, (response) => {
                         if (response.error) {
