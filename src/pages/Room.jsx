@@ -64,6 +64,61 @@ function Room() {
     const peersRef = useRef({});
     const screenStreamRef = useRef(null);
 
+    const createPeer = useCallback((userId, mediaStream, initiator, name = '') => {
+        if (!mediaStream) return null;
+
+        try {
+            const peer = new Peer({
+                initiator,
+                trickle: false,
+                stream: mediaStream,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                    ]
+                }
+            });
+
+            peer.on('signal', (data) => {
+                console.log(`Sending signal to ${userId} (initiator: ${initiator})`);
+                if (initiator) {
+                    socket.emit('call-user', {
+                        userToCall: userId,
+                        signalData: data,
+                        from: myId,
+                        userName
+                    });
+                } else {
+                    socket.emit('answer-call', { to: userId, signal: data });
+                }
+            });
+
+            peer.on('stream', (remoteStream) => {
+                console.log('Received remote stream from', name, 'Tracks:', remoteStream.getTracks().length);
+                setPeers(prev => ({
+                    ...prev,
+                    [userId]: { ...prev[userId], stream: remoteStream }
+                }));
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+            });
+
+            peersRef.current[userId] = { peer, name };
+            setPeers(prev => ({
+                ...prev,
+                [userId]: { peer, stream: prev[userId]?.stream || null }
+            }));
+            return peer;
+        } catch (e) {
+            console.error('Failed to create peer:', e);
+            return null;
+        }
+    }, [socket, myId, userName]);
+
     // Initialize media & join room
     useEffect(() => {
         const init = async () => {
@@ -233,52 +288,7 @@ function Room() {
         };
     }, [socket]); // Fully stable dependencies
 
-    const createPeer = (userId, mediaStream, initiator, name = '') => {
-        const peer = new Peer({
-            initiator,
-            trickle: false, // More reliable for basic signaling
-            stream: mediaStream,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                ]
-            }
-        });
 
-        peer.on('signal', (data) => {
-            if (initiator) {
-                socket.emit('call-user', {
-                    userToCall: userId,
-                    signalData: data,
-                    from: myId,
-                    userName
-                });
-            } else {
-                socket.emit('answer-call', { to: userId, signal: data });
-            }
-        });
-
-        peer.on('stream', (remoteStream) => {
-            console.log('Received remote stream from', name);
-            setPeers(prev => ({
-                ...prev,
-                [userId]: { ...prev[userId], stream: remoteStream }
-            }));
-        });
-
-        peer.on('error', (err) => {
-            console.error('Peer error:', err);
-        });
-
-        peersRef.current[userId] = { peer, name };
-        setPeers(prev => ({
-            ...prev,
-            [userId]: { peer, stream: prev[userId]?.stream || null }
-        }));
-        return peer;
-    };
 
     // Media controls
     const toggleVideo = () => {
