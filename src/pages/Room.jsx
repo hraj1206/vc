@@ -6,7 +6,7 @@ import {
     FiVideo, FiVideoOff, FiMic, FiMicOff, FiMonitor,
     FiPhone, FiMessageSquare, FiFile, FiPlay, FiGrid,
     FiCopy, FiCheck, FiUsers, FiMaximize, FiMinimize,
-    FiSend, FiX, FiChevronLeft
+    FiSend, FiX, FiChevronLeft, FiRefreshCw
 } from 'react-icons/fi';
 import Chat from '../components/Chat';
 import FileShare from '../components/FileShare';
