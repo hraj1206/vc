@@ -75,7 +75,15 @@ export default function Games({ socket, roomId, myId, userName, participants = [
         tictactoe: <TicTacToe socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
         rps: <RPS socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
         connect4: <Connect4 socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
-        // ... add others as they get server logic
+        hangman: <Hangman socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        memory: <Memory socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        numguess: <NumGuess socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        mathquiz: <MathQuiz socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        wordchain: <WordChain socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        drawing: <DrawTogether socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        dice: <DiceRoll socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        coin: <CoinFlip socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
+        snake: <Snake socket={socket} roomId={roomId} myId={myId} userName={userName} participants={participants} initialState={currentGameState} />,
     };
 
     return (
@@ -256,10 +264,7 @@ function Connect4({ socket, roomId, myId, userName, participants, initialState }
             </div>
             {winner && <div className="ttt-status"><span className={`ttt-result ${winner === myColor ? 'win' : 'lose'}`}>{winner === myColor ? '🎉 You Won!' : '😢 They Won!'}</span></div>}
             {!winner && <div className="ttt-status"><span className="ttt-turn">{isMyTurn ? 'Your turn' : 'Opponent\'s turn…'}</span></div>}
-            <div className="score-row">
-                <ScoreBox label={userName} val={score.me} color="#6c5ce7" />
-                <ScoreBox label={opp?.name || 'Opp'} val={score.them} color="#ec4899" />
-            </div>
+            {/* Score row removed until state is implemented */}
             <div className="c4-board">
                 {Array(COLS).fill(0).map((_, c) => (
                     <div key={c} className="c4-col" onClick={() => drop(c)}>
@@ -321,11 +326,7 @@ function RPS({ socket, roomId, myId, userName, participants, initialState }) {
 
     return (
         <div className="rps-container">
-            <div className="score-row">
-                <ScoreBox label={userName} val={score.me} color="#6c5ce7" />
-                <ScoreBox label="Draws" val={score.draws} color="#f59e0b" />
-                <ScoreBox label={opp?.name || 'Opp'} val={score.them} color="#ec4899" />
-            </div>
+            {/* Score row removed until state is implemented */}
 
             <div className="rps-arena">
                 <div className={`rps-side ${myPick ? 'picked' : ''}`}>
@@ -795,9 +796,16 @@ function DrawTogether({ socket, roomId, myId, userName }) {
         return () => window.removeEventListener('resize', resize);
     }, []);
 
-    useGameSync(socket, 'drawing', {
-        onUpdate: (action) => { if (action.type === 'draw') drawLine(action.from, action.to, action.color, action.size); },
-        onReset: () => { const c = canvasRef.current; if (!c) return; const ctx = c.getContext('2d'); ctx.fillStyle = '#1a1a3e'; ctx.fillRect(0, 0, c.width, c.height); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'drawing' && state.type === 'draw') {
+                drawLine(state.from, state.to, state.color, state.size);
+            }
+            if (state.gameId === 'drawing' && state.type === 'reset') {
+                const c = canvasRef.current; if (!c) return;
+                const ctx = c.getContext('2d'); ctx.fillStyle = '#1a1a3e'; ctx.fillRect(0, 0, c.width, c.height);
+            }
+        }
     });
 
     const drawLine = (from, to, c, s) => {
@@ -812,11 +820,11 @@ function DrawTogether({ socket, roomId, myId, userName }) {
         if (!isDrawing) return; e.preventDefault();
         const cur = getPos(e); const dc = isEraser ? '#1a1a3e' : color;
         drawLine(lastPos.current, cur, dc, brushSize);
-        socket.emit('game-action', { roomId, gameType: 'drawing', action: { type: 'draw', from: lastPos.current, to: cur, color: dc, size: brushSize } });
+        emit(socket, roomId, 'drawing', { type: 'draw', from: lastPos.current, to: cur, color: dc, size: brushSize });
         lastPos.current = cur;
     };
     const handleEnd = () => { setIsDrawing(false); lastPos.current = null; };
-    const clearAll = () => { const c = canvasRef.current; if (!c) return; const ctx = c.getContext('2d'); ctx.fillStyle = '#1a1a3e'; ctx.fillRect(0, 0, c.width, c.height); socket.emit('game-reset', { roomId, gameType: 'drawing' }); };
+    const clearAll = () => { const c = canvasRef.current; if (!c) return; const ctx = c.getContext('2d'); ctx.fillStyle = '#1a1a3e'; ctx.fillRect(0, 0, c.width, c.height); emitReset(socket, roomId, 'drawing'); };
 
     return (
         <div className="draw-container">
@@ -845,9 +853,13 @@ function DiceRoll({ socket, roomId, myId, userName, participants }) {
     const [score, setScore] = useState({ me: 0, them: 0 });
     const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
-    useGameSync(socket, 'dice', {
-        onUpdate: (action) => { if (action.type === 'roll') setTheirRoll(action.val); },
-        onReset: () => { setMyRoll(null); setTheirRoll(null); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'dice') {
+                if (state.type === 'roll') setTheirRoll(state.val);
+                if (state.type === 'reset') { setMyRoll(null); setTheirRoll(null); }
+            }
+        }
     });
 
     useEffect(() => {
@@ -908,18 +920,20 @@ function CoinFlip({ socket, roomId, myId, userName, participants }) {
     const [flipping, setFlipping] = useState(false);
     const [score, setScore] = useState({ me: 0, them: 0 });
 
-    useGameSync(socket, 'coin', {
-        onUpdate: (action) => {
-            if (action.type === 'call') {
-                const res = Math.random() < 0.5 ? 'Heads' : 'Tails';
-                setResult(res);
-                const won = (action.call === res) === isCaller;
-                if (!isCaller) { if (action.call === res) setScore(s => ({ ...s, them: s.them + 1 })); else setScore(s => ({ ...s, me: s.me + 1 })); }
-                emit(socket, roomId, 'coin', { type: 'flip', result: res });
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'coin') {
+                if (state.type === 'call') {
+                    const res = Math.random() < 0.5 ? 'Heads' : 'Tails';
+                    setResult(res);
+                    const won = (state.call === res) === isCaller;
+                    if (!isCaller) { if (state.call === res) setScore(s => ({ ...s, them: s.them + 1 })); else setScore(s => ({ ...s, me: s.me + 1 })); }
+                    emit(socket, roomId, 'coin', { type: 'flip', result: res });
+                }
+                if (state.type === 'flip') { setResult(state.result); }
+                if (state.type === 'reset') { setCall(null); setResult(null); }
             }
-            if (action.type === 'flip') { setResult(action.result); }
-        },
-        onReset: () => { setCall(null); setResult(null); }
+        }
     });
 
     const makeCall = (c) => {
@@ -977,10 +991,10 @@ function Snake({ socket, roomId, myId, userName, participants }) {
     const [alive, setAlive] = useState(true);
     const [started, setStarted] = useState(false);
 
-    useGameSync(socket, 'snake', {
-        onUpdate: (action) => {
-            if (action.type === 'score') {
-                setHighScore(prev => action.val > prev.val ? { name: action.who, val: action.val } : prev);
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'snake' && state.type === 'score') {
+                setHighScore(prev => state.val > prev.val ? { name: state.who, val: state.val } : prev);
             }
         }
     });
