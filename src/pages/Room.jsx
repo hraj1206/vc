@@ -312,39 +312,46 @@ function Room() {
     };
 
     const onStopScreenShare = useCallback(() => {
-        if (screenStreamRef.current) {
-            screenStreamRef.current.getTracks().forEach(t => t.stop());
-            screenStreamRef.current = null;
-        }
-        if (stream) {
-            const videoTrack = stream.getVideoTracks()[0];
-            const screenTrack = screenStreamRef.current?.getVideoTracks()[0]; // this will be null now
-            Object.values(peersRef.current).forEach(({ peer }) => {
-                // In standard simple-peer, you provide (trackToRemove, newTrack, stream)
-                // But we need to know WHICH track to remove. Simple-peer abstracts this.
-                // However, since we set trickle:false, it might be better to just re-init?
-                // No, replaceTrack is supported if we have the tracks.
-                // Actually, our createPeer used 'stream' directly.
-                // For simplicity in this build, let's use the internal _pc if needed, 
-                // but peer.replaceTrack is safer if we find the correct target.
-                if (peer && videoTrack) {
-                    try {
-                        const senders = peer._pc.getSenders();
-                        const sender = senders.find(s => s.track?.kind === 'video');
-                        if (sender) sender.replaceTrack(videoTrack);
-                    } catch (e) { console.error('Replace track failed:', e); }
-                }
-            });
-        }
-        setScreenSharing(false);
-        socket.emit('screen-share-stopped', { roomId });
-    }, [stream, roomId, socket]);
+        if (screenSharing) {
+            console.log('Stopping screen share...');
 
-    const toggleScreenShare = async () => {
+            // Get references before stopping
+            const screenStream = screenStreamRef.current;
+            const screenTrack = screenStream?.getVideoTracks()[0];
+            const cameraTrack = stream?.getVideoTracks()[0];
+
+            if (screenTrack && cameraTrack) {
+                Object.values(peersRef.current).forEach(({ peer }) => {
+                    if (peer) {
+                        try {
+                            // Standard simple-peer method
+                            peer.replaceTrack(screenTrack, cameraTrack, stream);
+                        } catch (e) {
+                            console.error('Track replacement failed, falling back to PC:', e);
+                            try {
+                                const sender = peer._pc.getSenders().find(s => s.track?.kind === 'video');
+                                if (sender) sender.replaceTrack(cameraTrack);
+                            } catch (pcErr) {
+                                console.error('PC replacement failed:', pcErr);
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (screenStream) {
+                screenStream.getTracks().forEach(t => t.stop());
+            }
+            screenStreamRef.current = null;
+            setScreenSharing(false);
+            socket.emit('screen-share-stopped', { roomId });
+        }
+    }, [screenSharing, stream, roomId, socket]);
+
+    const toggleScreenShare = () => {
         if (screenSharing) {
             onStopScreenShare();
         } else {
-            // This is now handled by the Panel UI
             setActivePanel('screen');
         }
     };
@@ -595,13 +602,17 @@ function Room() {
                                             const screenStream = await navigator.mediaDevices.getDisplayMedia(constraints);
                                             screenStreamRef.current = screenStream;
                                             const screenTrack = screenStream.getVideoTracks()[0];
+                                            const cameraTrack = stream?.getVideoTracks()[0];
 
-                                            // Standard replaceTrack method
+                                            setScreenSharing(true);
+                                            socket.emit('screen-share-started', { roomId, fromName: userName });
+
                                             Object.values(peersRef.current).forEach(({ peer }) => {
-                                                if (peer && stream) {
-                                                    const videoTrack = stream.getVideoTracks()[0];
-                                                    if (videoTrack) {
-                                                        peer.replaceTrack(videoTrack, screenTrack, stream);
+                                                if (peer && screenTrack && cameraTrack) {
+                                                    try {
+                                                        peer.replaceTrack(cameraTrack, screenTrack, stream);
+                                                    } catch (e) {
+                                                        console.error('Screen replacement failed:', e);
                                                     }
                                                 }
                                             });
@@ -609,8 +620,6 @@ function Room() {
                                             screenTrack.onended = () => {
                                                 onStopScreenShare();
                                             };
-                                            setScreenSharing(true);
-                                            socket.emit('screen-share-started', { roomId, fromName: userName });
                                         } catch (err) {
                                             console.error('Screen share failed:', err);
                                         }
@@ -702,7 +711,7 @@ function PeerVideo({ peerId, peerData, isFullscreen, onToggleFullscreen, partici
         if (peerData?.stream && videoRef.current) {
             videoRef.current.srcObject = peerData.stream;
         }
-    }, [peerData?.stream]);
+    }, [peerData?.stream, participant]); // Added participant dependency to force re-attach if context changes
 
     const name = participant?.name || 'Peer';
 
