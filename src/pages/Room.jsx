@@ -46,6 +46,7 @@ function Room() {
     const [audioEnabled, setAudioEnabled] = useState(true);
     const [screenSharing, setScreenSharing] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [isMirrored, setIsMirrored] = useState(true);
 
     // UI state
     const [activePanel, setActivePanel] = useState(null); // 'chat', 'files', 'watch', 'games'
@@ -69,12 +70,6 @@ function Room() {
                     video: { width: 1280, height: 720, facingMode: 'user' },
                     audio: { echoCancellation: true, noiseSuppression: true }
                 });
-                setStream(mediaStream);
-                if (myVideoRef.current) {
-                    myVideoRef.current.srcObject = mediaStream;
-                }
-
-                // Once stream is ready, join the room
                 if (socket) {
                     socket.emit('join-room', { roomId, userName }, (response) => {
                         if (response.error) {
@@ -84,11 +79,8 @@ function Room() {
                             if (response.users) {
                                 const others = response.users.map(u => ({ id: u.id, name: u.name || 'User' }));
                                 setParticipants(others);
-                                // The newcomer initiates calls to all existing users
                                 if (mediaStream) {
-                                    others.forEach(u => {
-                                        createPeer(u.id, mediaStream, true, u.name);
-                                    });
+                                    others.forEach(u => createPeer(u.id, mediaStream, true, u.name));
                                 }
                             }
                             if (response.messages) {
@@ -99,19 +91,10 @@ function Room() {
                 }
             } catch (err) {
                 console.error('Failed to get media:', err);
-                // Try audio only
                 try {
                     const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     setStream(audioStream);
                     setVideoEnabled(false);
-
-                    if (socket) {
-                        socket.emit('join-room', { roomId, userName }, (response) => {
-                            if (!response.error && response.users) {
-                                setParticipants(response.users.map(u => ({ id: u.id, name: u.name || 'User' })));
-                            }
-                        });
-                    }
                 } catch (e) {
                     console.error('No media available:', e);
                 }
@@ -120,21 +103,21 @@ function Room() {
         init();
 
         // Re-join if socket reconnects
-        if (socket) {
-            socket.on('connect', init);
-        }
+        if (socket) socket.on('connect', init);
 
         return () => {
-            // Cleanup
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-            }
+            if (stream) stream.getTracks().forEach(t => t.stop());
             Object.values(peersRef.current).forEach(p => p.peer?.destroy());
-            if (socket) {
-                socket.off('connect', init);
-            }
+            if (socket) socket.off('connect', init);
         };
     }, [socket, roomId, userName, navigate]);
+
+    // Ensure local video stream is always attached to the current ref
+    useEffect(() => {
+        if (stream && myVideoRef.current) {
+            myVideoRef.current.srcObject = stream;
+        }
+    }, [stream, participants.length, videoEnabled]);
 
     // Socket events
     useEffect(() => {
@@ -333,6 +316,11 @@ function Room() {
                 socket.emit('screen-share-started', { roomId });
             } catch (err) {
                 console.error('Screen share failed:', err);
+                if (err.name === 'NotAllowedError') {
+                    alert('Permission denied for screen sharing.');
+                } else {
+                    alert('Screen sharing is not supported on this browser or device (common on mobile).');
+                }
             }
         }
     };
@@ -476,7 +464,7 @@ function Room() {
                                 />
                             ))}
 
-                            {/* My Video: Only show in grid if NO other participants are there */}
+                            {/* My Video (Grid mode): Only if alone */}
                             {participants.length === 0 && (
                                 <div className="video-tile local-video">
                                     <video
@@ -484,7 +472,7 @@ function Room() {
                                         autoPlay
                                         muted
                                         playsInline
-                                        className={`video-element ${!videoEnabled ? 'hidden' : ''}`}
+                                        className={`video-element ${!videoEnabled ? 'hidden' : ''} ${isMirrored ? 'mirrored' : ''}`}
                                     />
                                     {!videoEnabled && (
                                         <div className="video-avatar">
@@ -494,19 +482,29 @@ function Room() {
                                     <div className="video-label">
                                         <span className="video-name">{userName} (You)</span>
                                     </div>
+                                    <button
+                                        className="mirror-toggle-btn"
+                                        onClick={() => setIsMirrored(!isMirrored)}
+                                        title="Flip Video"
+                                    >
+                                        <FiRefreshCw size={12} />
+                                    </button>
                                 </div>
                             )}
                         </div>
 
-                        {/* My Video PIP: Only show if other participants ARE there */}
+                        {/* My Video (PIP mode): Only if others present */}
                         {participants.length > 0 && (
                             <div className="video-tile local-video pip">
                                 <video
-                                    ref={myVideoRef}
+                                    ref={(el) => {
+                                        myVideoRef.current = el;
+                                        if (el && stream) el.srcObject = stream;
+                                    }}
                                     autoPlay
                                     muted
                                     playsInline
-                                    className={`video-element ${!videoEnabled ? 'hidden' : ''}`}
+                                    className={`video-element ${!videoEnabled ? 'hidden' : ''} ${isMirrored ? 'mirrored' : ''}`}
                                 />
                                 {!videoEnabled && (
                                     <div className="video-avatar">
@@ -516,12 +514,19 @@ function Room() {
                                 <div className="video-label">
                                     <span className="video-name">You</span>
                                 </div>
+                                <button
+                                    className="mirror-toggle-btn"
+                                    onClick={() => setIsMirrored(!isMirrored)}
+                                    title="Flip Video"
+                                >
+                                    <FiRefreshCw size={10} />
+                                </button>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Side Panel */}
+                {/* Sidebar Panels */}
                 {activePanel && (
                     <div className="side-panel glass-card animate-scale-in">
                         <div className="panel-header">
