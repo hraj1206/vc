@@ -80,10 +80,16 @@ function Room() {
                         if (response.error) {
                             console.warn('Join error:', response.error);
                             alert(`Joining failed: ${response.error}`);
-                            // navigate('/'); // Temporarily disabled to see the error
                         } else {
                             if (response.users) {
-                                setParticipants(response.users.map(u => ({ id: u.id, name: u.name || 'User' })));
+                                const others = response.users.map(u => ({ id: u.id, name: u.name || 'User' }));
+                                setParticipants(others);
+                                // The newcomer initiates calls to all existing users
+                                if (mediaStream) {
+                                    others.forEach(u => {
+                                        createPeer(u.id, mediaStream, true, u.name);
+                                    });
+                                }
                             }
                             if (response.messages) {
                                 setMessages(response.messages);
@@ -136,25 +142,28 @@ function Room() {
 
         socket.on('user-joined', ({ userId, userName: name }) => {
             console.log(`${name} joined`);
-            setParticipants(prev => [...prev, { id: userId, name }]);
-            // Create peer (initiator)
-            if (stream) {
-                createPeer(userId, stream, true);
-            }
+            setParticipants(prev => {
+                if (prev.find(p => p.id === userId)) return prev;
+                return [...prev, { id: userId, name }];
+            });
+            // Existing members wait for the newcomer to initiate the call
         });
 
         socket.on('incoming-call', ({ signal, from, userName: name }) => {
             console.log(`Incoming call from ${name}`);
-            // Add to participants if not already there
             setParticipants(prev => {
                 if (prev.find(p => p.id === from)) return prev;
                 return [...prev, { id: from, name }];
             });
 
-            // Create peer (non-initiator) and answer
             if (stream) {
-                const peer = createPeer(from, stream, false, name);
-                peer.signal(signal);
+                let peerObj = peersRef.current[from];
+                if (!peerObj) {
+                    const peer = createPeer(from, stream, false, name);
+                    peer.signal(signal);
+                } else {
+                    peerObj.peer.signal(signal);
+                }
             }
         });
 
@@ -353,14 +362,18 @@ function Room() {
         }
     };
 
-    const peerEntries = Object.entries(peers);
-    const totalVideos = 1 + peerEntries.length; // me + peers
-    const gridClass = totalVideos <= 1 ? 'grid-1' : totalVideos <= 2 ? 'grid-2' : totalVideos <= 4 ? 'grid-4' : 'grid-many';
     // Full participant list including self (for games, etc.)
     const allParticipants = [
         { id: myId, name: userName, isMe: true },
         ...participants
     ];
+
+    const peerEntries = Object.entries(peers);
+    const totalVideos = allParticipants.length;
+    // For the grid layout, we only count videos that are NOT in PIP
+    // If there are other participants, my video goes to PIP
+    const visibleGridCount = participants.length > 0 ? participants.length : 1;
+    const gridClass = visibleGridCount <= 1 ? 'grid-1' : visibleGridCount <= 2 ? 'grid-2' : visibleGridCount <= 4 ? 'grid-4' : 'grid-many';
 
     return (
         <div className="room-container">
@@ -449,22 +462,45 @@ function Room() {
 
                         {/* Others Grid / Sidebar */}
                         <div className={`participants-videos ${(remoteScreenShare || screenSharing) ? 'sidebar' : 'grid'}`}>
-                            {/* Peer Videos */}
-                            {peerEntries.filter(([id]) => id !== remoteScreenShare?.userId).map(([peerId, peerData]) => (
+                            {/* Peer Videos: Map through participants to ensure every person has a slot */}
+                            {participants.filter(p => p.id !== remoteScreenShare?.userId).map((p) => (
                                 <PeerVideo
-                                    key={peerId}
-                                    peerId={peerId}
-                                    peerData={peerData}
-                                    isFullscreen={fullscreenVideo === peerId}
+                                    key={p.id}
+                                    peerId={p.id}
+                                    peerData={peers[p.id]}
+                                    isFullscreen={fullscreenVideo === p.id}
                                     onToggleFullscreen={() =>
-                                        setFullscreenVideo(fullscreenVideo === peerId ? null : peerId)
+                                        setFullscreenVideo(fullscreenVideo === p.id ? null : p.id)
                                     }
-                                    participant={participants.find(p => p.id === peerId)}
+                                    participant={p}
                                 />
                             ))}
 
-                            {/* My Video (Always small if others are present) */}
-                            <div className={`video-tile local-video ${participants.length > 0 ? 'pip' : ''}`}>
+                            {/* My Video: Only show in grid if NO other participants are there */}
+                            {participants.length === 0 && (
+                                <div className="video-tile local-video">
+                                    <video
+                                        ref={myVideoRef}
+                                        autoPlay
+                                        muted
+                                        playsInline
+                                        className={`video-element ${!videoEnabled ? 'hidden' : ''}`}
+                                    />
+                                    {!videoEnabled && (
+                                        <div className="video-avatar">
+                                            <span>{userName.charAt(0).toUpperCase()}</span>
+                                        </div>
+                                    )}
+                                    <div className="video-label">
+                                        <span className="video-name">{userName} (You)</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* My Video PIP: Only show if other participants ARE there */}
+                        {participants.length > 0 && (
+                            <div className="video-tile local-video pip">
                                 <video
                                     ref={myVideoRef}
                                     autoPlay
@@ -481,7 +517,7 @@ function Room() {
                                     <span className="video-name">You</span>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
