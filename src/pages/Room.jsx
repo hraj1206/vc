@@ -229,7 +229,10 @@ function Room() {
         });
 
         peersRef.current[userId] = { peer, name };
-        setPeers(prev => ({ ...prev, [userId]: { peer, stream: null } }));
+        setPeers(prev => ({
+            ...prev,
+            [userId]: { peer, stream: prev[userId]?.stream || null }
+        }));
         return peer;
     };
 
@@ -405,10 +408,10 @@ function Room() {
                                     />
                                 ) : (
                                     <PeerVideo
-                                        peerId={remoteScreenShare.userId}
-                                        peerData={peers[remoteScreenShare.userId]}
+                                        peerId={remoteScreenShare?.userId}
+                                        peerData={peers[remoteScreenShare?.userId]}
                                         isFullscreen={false}
-                                        participant={participants.find(p => p.id === remoteScreenShare.userId)}
+                                        participant={participants.find(p => p.id === remoteScreenShare?.userId)}
                                         isSpotlight={true}
                                     />
                                 )}
@@ -610,16 +613,16 @@ function PeerVideo({ peerId, peerData, isFullscreen, onToggleFullscreen, partici
     const videoRef = useRef(null);
 
     useEffect(() => {
-        if (peerData.stream && videoRef.current) {
+        if (peerData?.stream && videoRef.current) {
             videoRef.current.srcObject = peerData.stream;
         }
-    }, [peerData.stream]);
+    }, [peerData?.stream]);
 
     const name = participant?.name || 'Peer';
 
     return (
         <div className={`video-tile ${isFullscreen ? 'fullscreen' : ''}`}>
-            {peerData.stream ? (
+            {peerData?.stream ? (
                 <video ref={videoRef} autoPlay playsInline className="video-element" />
             ) : (
                 <div className="video-avatar">
