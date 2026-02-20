@@ -38,6 +38,7 @@ function Room() {
     const [participants, setParticipants] = useState([]);
     const [fullscreenVideo, setFullscreenVideo] = useState(null);
     const [showParticipantsList, setShowParticipantsList] = useState(false);
+    const [remoteScreenShare, setRemoteScreenShare] = useState(null); // { userId, userName }
 
     const myVideoRef = useRef(null);
     const peersRef = useRef({});
@@ -158,6 +159,7 @@ function Room() {
         socket.on('user-left', ({ userId, userName: name }) => {
             console.log(`${name} left`);
             setParticipants(prev => prev.filter(p => p.id !== userId));
+            if (remoteScreenShare?.userId === userId) setRemoteScreenShare(null);
             if (peersRef.current[userId]) {
                 peersRef.current[userId].peer?.destroy();
                 delete peersRef.current[userId];
@@ -169,6 +171,14 @@ function Room() {
             }
         });
 
+        socket.on('screen-share-started', ({ from, fromName }) => {
+            setRemoteScreenShare({ userId: from, userName: fromName });
+        });
+
+        socket.on('screen-share-stopped', ({ from }) => {
+            setRemoteScreenShare(prev => prev?.userId === from ? null : prev);
+        });
+
         return () => {
             socket.off('user-joined');
             socket.off('incoming-call');
@@ -176,8 +186,10 @@ function Room() {
             socket.off('ice-candidate');
             socket.off('new-message');
             socket.off('user-left');
+            socket.off('screen-share-started');
+            socket.off('screen-share-stopped');
         };
-    }, [socket, stream, activePanel]);
+    }, [socket, stream, activePanel, remoteScreenShare]);
 
     const createPeer = (userId, mediaStream, initiator, name = '') => {
         const peer = new Peer({
@@ -380,46 +392,68 @@ function Room() {
             <div className="room-body">
                 {/* Video Grid */}
                 <div className={`video-area ${activePanel ? 'with-panel' : ''}`}>
-                    <div className={`video-grid ${gridClass}`}>
-                        {/* My Video */}
-                        <div className={`video-tile ${fullscreenVideo === 'me' ? 'fullscreen' : ''}`}>
-                            <video
-                                ref={myVideoRef}
-                                autoPlay
-                                muted
-                                playsInline
-                                className={`video-element ${!videoEnabled ? 'hidden' : ''}`}
-                            />
-                            {!videoEnabled && (
-                                <div className="video-avatar">
-                                    <span>{userName.charAt(0).toUpperCase()}</span>
+                    <div className={`video-grid ${gridClass} ${remoteScreenShare || screenSharing ? 'presentation-mode' : ''}`}>
+                        {/* Main Spotlight (Remote Screen or Focused Peer) */}
+                        {(remoteScreenShare || screenSharing) && (
+                            <div className="video-tile spotlight">
+                                {screenSharing ? (
+                                    <video
+                                        ref={(el) => { if (el && screenStreamRef.current) el.srcObject = screenStreamRef.current; }}
+                                        autoPlay
+                                        playsInline
+                                        className="video-element"
+                                    />
+                                ) : (
+                                    <PeerVideo
+                                        peerId={remoteScreenShare.userId}
+                                        peerData={peers[remoteScreenShare.userId]}
+                                        isFullscreen={false}
+                                        participant={participants.find(p => p.id === remoteScreenShare.userId)}
+                                        isSpotlight={true}
+                                    />
+                                )}
+                                <div className="video-label spotlight-label">
+                                    <FiMonitor size={14} />
+                                    <span>{screenSharing ? 'Your Screen' : `${remoteScreenShare.userName}'s Screen`}</span>
                                 </div>
-                            )}
-                            <div className="video-label">
-                                <span className="video-name">{userName} (You)</span>
-                                {!audioEnabled && <FiMicOff size={12} />}
                             </div>
-                            <button
-                                className="video-fullscreen-btn"
-                                onClick={() => setFullscreenVideo(fullscreenVideo === 'me' ? null : 'me')}
-                            >
-                                {fullscreenVideo === 'me' ? <FiMinimize size={14} /> : <FiMaximize size={14} />}
-                            </button>
-                        </div>
+                        )}
 
-                        {/* Peer Videos */}
-                        {peerEntries.map(([peerId, peerData]) => (
-                            <PeerVideo
-                                key={peerId}
-                                peerId={peerId}
-                                peerData={peerData}
-                                isFullscreen={fullscreenVideo === peerId}
-                                onToggleFullscreen={() =>
-                                    setFullscreenVideo(fullscreenVideo === peerId ? null : peerId)
-                                }
-                                participant={participants.find(p => p.id === peerId)}
-                            />
-                        ))}
+                        {/* Others Grid / Sidebar */}
+                        <div className={`participants-videos ${(remoteScreenShare || screenSharing) ? 'sidebar' : 'grid'}`}>
+                            {/* Peer Videos */}
+                            {peerEntries.filter(([id]) => id !== remoteScreenShare?.userId).map(([peerId, peerData]) => (
+                                <PeerVideo
+                                    key={peerId}
+                                    peerId={peerId}
+                                    peerData={peerData}
+                                    isFullscreen={fullscreenVideo === peerId}
+                                    onToggleFullscreen={() =>
+                                        setFullscreenVideo(fullscreenVideo === peerId ? null : peerId)
+                                    }
+                                    participant={participants.find(p => p.id === peerId)}
+                                />
+                            ))}
+
+                            {/* My Video (Always small if others are present) */}
+                            <div className={`video-tile local-video ${participants.length > 0 ? 'pip' : ''}`}>
+                                <video
+                                    ref={myVideoRef}
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    className={`video-element ${!videoEnabled ? 'hidden' : ''}`}
+                                />
+                                {!videoEnabled && (
+                                    <div className="video-avatar">
+                                        <span>{userName.charAt(0).toUpperCase()}</span>
+                                    </div>
+                                )}
+                                <div className="video-label">
+                                    <span className="video-name">You</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

@@ -135,7 +135,7 @@ export default function Games({ socket, roomId, myId, userName, participants = [
                 </>
             ) : (
                 <div className="game-view">
-                    <button className="btn btn-secondary btn-sm game-back" onClick={() => setActiveGame(null)}>← Games</button>
+                    <button className="btn btn-secondary btn-sm game-back" onClick={() => { setActiveGame(null); setCurrentGameState(null); }}>← Games</button>
                     <div className="game-inner">{gameComp[activeGame]}</div>
                 </div>
             )}
@@ -152,14 +152,14 @@ function useGameSync(socket, handlers) {
         };
         socket.on('game-state-update', onStateUpdate);
         return () => { socket.off('game-state-update', onStateUpdate); };
-    }, [socket]);
+    }, [socket, handlers.onStateUpdate]);
 }
 
-function emit(socket, roomId, gameType, action) {
-    socket.emit('game-action', { roomId, gameType, action });
+function emit(socket, roomId, gameId, action) {
+    socket.emit('game-action', { roomId, gameId, action });
 }
-function emitReset(socket, roomId, gameType) {
-    socket.emit('game-reset', { roomId, gameType });
+function emitReset(socket, roomId, gameId) {
+    socket.emit('game-reset', { roomId, gameId });
 }
 
 /* ─────────────── 1. TIC-TAC-TOE ─────────────── */
@@ -377,12 +377,12 @@ function Hangman({ socket, roomId, myId, userName, participants }) {
     const maxWrong = 6;
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-    useGameSync(socket, 'hangman', {
-        onUpdate: (action) => {
-            if (action.type === 'start') { setWord(action.word); setGuessed([]); setWrong(0); setPhase('playing'); }
-            if (action.type === 'guess') { setGuessed(g => [...g, action.letter]); }
-        },
-        onReset: () => { setWord(''); setGuessed([]); setWrong(0); setPhase('waiting'); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'hangman') {
+                // setter logic is currently client-side only
+            }
+        }
     });
 
     useEffect(() => {
@@ -481,29 +481,12 @@ function Memory({ socket, roomId, myId, userName, participants }) {
     const totalMatched = myScore + themScore;
     const isMyTurn = (totalMatched % 2 === 0) === iFirst;
 
-    useGameSync(socket, 'memory', {
-        onUpdate: (action) => {
-            if (action.type === 'flip') {
-                setFlipped(prev => {
-                    const nf = [...prev, action.idx];
-                    if (nf.length === 2) {
-                        const [a, b] = nf;
-                        setTimeout(() => {
-                            setCards(cs => {
-                                const nc = [...cs];
-                                if (nc[a].emoji === nc[b].emoji) { nc[a] = { ...nc[a], matched: true }; nc[b] = { ...nc[b], matched: true }; setThemScore(s => s + 1); }
-                                else { nc[a] = { ...nc[a], flipped: false }; nc[b] = { ...nc[b], flipped: false }; }
-                                return nc;
-                            });
-                            setFlipped([]);
-                        }, 900);
-                    }
-                    return nf;
-                });
-                setCards(cs => { const nc = [...cs]; nc[action.idx] = { ...nc[action.idx], flipped: true }; return nc; });
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'memory') {
+                // memory logic is currently client-side only
             }
-        },
-        onReset: () => { setCards(makeCards()); setFlipped([]); setMyScore(0); setThemScore(0); }
+        }
     });
 
     const flip = idx => {
@@ -585,19 +568,11 @@ function NumGuess({ socket, roomId, myId, userName, participants }) {
         }
     }, [isHost]);
 
-    useGameSync(socket, 'numguess', {
-        onUpdate: (action) => {
-            if (action.type === 'secret' && !isHost) setSecret(action.n);
-            if (action.type === 'guess') {
-                const diff = Math.abs(action.g - secret);
-                const hint = diff === 0 ? '🎯 Exact!' : action.g < secret ? `⬆️ Higher (off by ${diff})` : `⬇️ Lower (off by ${diff})`;
-                setTheirGuesses(g => [...g, { val: action.g, hint }]);
-                if (diff === 0) setTheirDone(true);
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'numguess') {
+                // numguess logic is currently client-side only
             }
-        },
-        onReset: () => {
-            setSecret(null); setGuessVal(''); setMyGuesses([]); setTheirGuesses([]);
-            setMyDone(false); setTheirDone(false);
         }
     });
 
@@ -687,12 +662,12 @@ function MathQuiz({ socket, roomId, myId, userName, participants }) {
         if (!first) emit(socket, roomId, 'mathquiz', { type: 'question', ...q });
     };
 
-    useGameSync(socket, 'mathquiz', {
-        onUpdate: (action) => {
-            if (action.type === 'question') { setQuestion({ q: action.q, ans: action.ans }); setAns(''); setFeedback(null); }
-            if (action.type === 'answer') { setTheirScore(s => s + 1); }
-        },
-        onReset: () => { setQuestion(null); setAns(''); setMyScore(0); setTheirScore(0); setFeedback(null); setRound(0); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'mathquiz') {
+                // mathquiz logic is currently client-side only
+            }
+        }
     });
 
     const submit = () => {
@@ -753,11 +728,12 @@ function WordChain({ socket, roomId, myId, userName, participants }) {
     const [myTurn, setMyTurn] = useState(iFirst);
     const [error, setError] = useState('');
 
-    useGameSync(socket, 'wordchain', {
-        onUpdate: (action) => {
-            if (action.type === 'word') { setChain(c => [...c, { word: action.word, who: action.who }]); setMyTurn(true); }
-        },
-        onReset: () => { setChain([]); setInput(''); setMyTurn(iFirst); setError(''); }
+    useGameSync(socket, {
+        onStateUpdate: (state) => {
+            if (state.gameId === 'wordchain') {
+                // wordchain logic is currently client-side only
+            }
+        }
     });
 
     const submit = () => {

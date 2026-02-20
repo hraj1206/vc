@@ -203,6 +203,56 @@
     grid-auto-rows: 1fr;
 }
 
+/* Presentation Mode (Screen Share) */
+.video-grid.presentation-mode {
+    display: flex;
+    gap: 16px;
+    height: 100%;
+}
+
+.video-tile.spotlight {
+    flex: 3;
+    height: 100%;
+    background: #000;
+}
+
+.participants-videos {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.participants-videos.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.participants-videos.sidebar {
+    max-width: 260px;
+}
+
+.local-video.pip {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 150px;
+    z-index: 10;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    border: 2px solid var(--accent-primary);
+}
+
+.video-label.spotlight-label {
+    top: 12px;
+    bottom: auto;
+    left: 12px;
+    background: rgba(108, 92, 231, 0.8);
+}
+
 /* Video Tile */
 .video-tile {
     position: relative;
